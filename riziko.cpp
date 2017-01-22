@@ -13,12 +13,13 @@ const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
 
 //Button constants
-const int BUTTON_WIDTH = 168;
+const int HIGH_WIDTH = 168;
+const int SEVEN_WIDTH = 78;
 const int BUTTON_HEIGHT = 100;
 const int TOTAL_BUTTONS = 3;
-int gcardID = 0;
-int gScore = 10;
-
+int gcardID;
+int gScore;
+char gWIN;
 
 
 //Texture wrapper class
@@ -30,9 +31,7 @@ class LTexture
 		~LTexture(); 
 
 		bool loadFromFile( string path );  //Loads image at specified path
-
 		void free();  //Deallocates texture
-
 		void render( int x, int y, SDL_Rect* clip ); 
 		
 		int getWidth();  //Gets image dimensions
@@ -58,31 +57,27 @@ class LButton
 	private:
 		//Top left position
 		SDL_Point mPosition;
-
-		int mCurrentSprite;  //Currently used global sprite
-		int mButtonID;  // 0, 1, 2 for high, 7, low
+		int mCurrentSprite;  // Currently used global sprite
+		int mButtonID;  // 0, 1, 2; for high, 7, low
 };
 
 bool init();  //Starts up SDL and creates window
 
-bool loadCards();  //Loads cards, put them into array, [0] is card back
+bool loadCards();  //Loads cards, put them into array, [0] is the card backside
 
 void close();  //Frees media and shuts down SDL
 
 SDL_Window* gWindow = NULL;
-
 SDL_Renderer* gRenderer = NULL;
+TTF_Font* greetingFont = NULL;
 
 //Mouse button sprites
-SDL_Rect gSpriteClips[ 9 ]; // three different states for three buttons
-LTexture gButtonSpriteSheetTexture;
+SDL_Rect gSpriteClips[9]; // three different states for three buttons
+LTexture gButtonSpriteSheetTexture; 
 
-LButton gButtons[ TOTAL_BUTTONS ]; //Buttons objects
-TTF_Font* greetingFont = NULL;
-TTF_Font* resultFont = NULL;
-TTF_Font* instructionFont = NULL;
+LButton gButtons[TOTAL_BUTTONS]; //Buttons objects
 
-LTexture cardTexture [53]; //card textures
+LTexture gCardTexture [53]; //card textures
 
 LTexture::LTexture()
 {
@@ -94,15 +89,11 @@ LTexture::LTexture()
 
 LTexture::~LTexture(){ free(); }
 
-
 bool LTexture::loadFromFile( string path )
 {
 	free();  //destroy a preexisting texture
-
 	SDL_Texture* newTexture = NULL;  //the final texture
-
 	SDL_Surface* loadedSurface = IMG_Load( path.c_str() ); 
-
     newTexture = SDL_CreateTextureFromSurface( gRenderer, loadedSurface );
 
 	mWidth = loadedSurface->w; 
@@ -116,9 +107,9 @@ bool LTexture::loadFromFile( string path )
 
 void LTexture::free()
 {	//Free texture if it exists
-	if( mTexture != NULL )
+	if(mTexture != NULL)
 	{
-		SDL_DestroyTexture( mTexture );
+		SDL_DestroyTexture(mTexture);
 		mTexture = NULL;
 		mWidth = 0;
 		mHeight = 0;
@@ -128,7 +119,6 @@ void LTexture::free()
 
 void LTexture::render( int x, int y, SDL_Rect* clip = NULL )
 {
-    //Set rendering space and render to screen
     SDL_Rect renderQuad = { x, y, mWidth, mHeight };
 
     //Set clip rendering dimensions
@@ -151,7 +141,7 @@ int LTexture::getHeight()
 	return mHeight;
 }
 
-class MessageTexture: public LTexture
+class MessageTexture: public LTexture // generate message texture for rendering
 {
 	public:
 		bool create(string text, TTF_Font* font, int fontSize, SDL_Color color)
@@ -162,8 +152,9 @@ class MessageTexture: public LTexture
 			SDL_Surface* surfaceMessage = TTF_RenderText_Solid(font, text.c_str(), color);
 			SDL_Texture* Message = SDL_CreateTextureFromSurface(gRenderer, surfaceMessage);
 			SDL_FreeSurface(surfaceMessage);
-			TTF_CloseFont( font );
+			TTF_CloseFont(font);
 			mTexture = Message;
+			return mTexture !=NULL;
 		}
 };
 
@@ -186,51 +177,28 @@ void LButton::setButtonID(int id)
 	mCurrentSprite = mButtonID * 3;
 }
 
-void LButton::handleEvent(SDL_Event* e )
+void LButton::handleEvent(SDL_Event* e ) // handle mouse events in PLAY state
 {
-	// mouse event
 	if( e->type == SDL_MOUSEMOTION || e->type == SDL_MOUSEBUTTONDOWN || e->type == SDL_MOUSEBUTTONUP)
 	{
-		//Get mouse position
+		// Get mouse position
 		int x, y, result;
-		SDL_GetMouseState( &x, &y );
+		int winLose;
+		SDL_GetMouseState(&x, &y);
+		bool inside = true; // mouse inside button flag
 
-		//Check if mouse is in button
-		bool inside = true;
-
-		//Mouse is left of the button
-		if( x < mPosition.x )
-		{
-			inside = false;
-		}
-		//Mouse is right of the button
-		else if( x > mPosition.x + BUTTON_WIDTH )
-		{
-			inside = false;
-		}
-		//Mouse above the button
-		else if( y < mPosition.y )
-		{
-			inside = false;
-		}
-		//Mouse below the button
-		else if( y > mPosition.y + BUTTON_HEIGHT )
-		{
-			inside = false;
-		}
+		// mouse outside contitions
+		if( x < mPosition.x ) inside = false;  //Mouse is left of the button
+		else if(x > mPosition.x + HIGH_WIDTH) inside = false; //Mouse is right of the button
+		else if(y < mPosition.y) inside = false;  //Mouse above the button
+		else if(y > mPosition.y + BUTTON_HEIGHT) inside = false;  //Mouse below the button
 
 		//Mouse is outside button
-		if( !inside )
+		if( !inside ) mCurrentSprite = 3 * (mButtonID+1)-3;  //default button (white border)
+		
+		else  //Mouse is inside button
 		{
-			mCurrentSprite = 3 * (mButtonID+1)-3;
-		}
-		//Mouse is inside button
-		else
-		{
-			//Set mouse over sprite
-			mCurrentSprite = 3 * (mButtonID+1)-3;
-
-			switch( e->type )
+			switch(e->type)
 			{
 				case SDL_MOUSEMOTION:
 				mCurrentSprite = 1 + 3 * mButtonID;
@@ -241,44 +209,31 @@ void LButton::handleEvent(SDL_Event* e )
 				break;	
 
 				case SDL_MOUSEBUTTONUP:
-		        gcardID = (rand() % 52)+1;
-		        result = gcardID % 13;
-        		if (result == 0) result = 13;
-        		switch(mButtonID)
+		        gcardID = rand() % 52 +1;  // pick a random number from 1 to 52 (also used to generate a file name)
+		        result = gcardID % 13; 
+        		if (result == 0) result = 13;  // "convert" to numberts 1 to 13 (A, 1 .. Q, K)
+        		winLose = gScore; // tomporary variable for comparing to gScore. Tells if the player wins or loses a turn
+        		switch(mButtonID)  // click button
         		{
-        			case 0:  // High
-	        			if (result > 7) 
-	        			{	
-	        				gScore++;
-	        			}
-	        			else
-        				{
-        					gScore--;
-        				}
+        			case 0:  // High 
+	        			if (result > 7) gScore++;
+	        			else gScore--;
 						break;
         			case 1:  // Seven
-	        			if (result == 7)
-	        			{
-
-	        				gScore+=4;
-	        			}
-	        			else
-	        			{
-	        				gScore--;
-	        			}
+	        			if (result == 7) gScore+=4;
+	        			else gScore--;
 						break;
         			case 2:  // Low
-        				if (result < 7)
-        				{
-        					gScore++;
-        				}
-        				else 
-        				{
-        					gScore--;
-        				}
+        				if (result < 7) gScore++;
+        				else gScore--; 
 						break;
         		}
-				mCurrentSprite = 1 + 3 * mButtonID;
+        		if (gScore > winLose) 
+        			gWIN = 'w';  // used for rendering win/lose message after every turn
+        		else gWIN = 'l';
+
+        		
+				mCurrentSprite = 1 + 3 * mButtonID; // set a hover sprite
 				break;							
 			}
 		}
@@ -292,11 +247,10 @@ void LButton::render()
 }
 
 
-
 bool init()
 {	
-	SDL_Init( SDL_INIT_VIDEO );
-	SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "1" );  //Set texture filtering to linear
+	SDL_Init(SDL_INIT_VIDEO);
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");  
 	//Create window
 	gWindow = SDL_CreateWindow(
 		"Riziko", 
@@ -304,15 +258,15 @@ bool init()
 		SDL_WINDOWPOS_UNDEFINED, 
 		SCREEN_WIDTH, 
 		SCREEN_HEIGHT, 
-		SDL_WINDOW_SHOWN );
+		SDL_WINDOW_SHOWN);
 
 	//Create renderer for window
-	gRenderer = SDL_CreateRenderer( gWindow, -1, SDL_RENDERER_ACCELERATED );
+	gRenderer = SDL_CreateRenderer(gWindow, -1, SDL_RENDERER_ACCELERATED);
 
-	SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xFF, 0xFF );  //Initialize renderer color
+	SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);  //Initialize renderer color
 
 	int imgFlags = IMG_INIT_PNG;  //Initialize PNG loading
-	IMG_Init( imgFlags );
+	IMG_Init(imgFlags);
 	TTF_Init();
 	return true;
 }
@@ -324,57 +278,55 @@ bool buildButtons() // creates buttons from spritesheet
 
 	for( int i = 0; i < 3; ++i )
 	{ // seven button
-		gSpriteClips[ i ].x = 78;
-		gSpriteClips[ i ].y = i * 100;
-		gSpriteClips[ i ].w = BUTTON_WIDTH;
+		gSpriteClips[ i ].x = SEVEN_WIDTH;
+		gSpriteClips[ i ].y = i * BUTTON_HEIGHT + i*5;
+		gSpriteClips[ i ].w = HIGH_WIDTH;
 		gSpriteClips[ i ].h = BUTTON_HEIGHT;
 	}
 
 	for( int i = 3; i < 6; ++i )
-	{  // high button
+	{  // seven button
 		gSpriteClips[ i ].x = 0;
-		gSpriteClips[ i ].y = (i-3) * 100;
-		gSpriteClips[ i ].w = 78;
+		gSpriteClips[ i ].y = (i-3) * BUTTON_HEIGHT;
+		gSpriteClips[ i ].w = SEVEN_WIDTH;
 		gSpriteClips[ i ].h = BUTTON_HEIGHT;
 	}
 
 	for( int i = 6; i < 9; ++i )
 	{  // low button
-		gSpriteClips[ i ].x = 246;
-		gSpriteClips[ i ].y = (i-6) * 100;
-		gSpriteClips[ i ].w = 167;
+		gSpriteClips[ i ].x = SEVEN_WIDTH + HIGH_WIDTH;
+		gSpriteClips[ i ].y = (i-6) * BUTTON_HEIGHT;
+		gSpriteClips[ i ].w = HIGH_WIDTH;
 		gSpriteClips[ i ].h = BUTTON_HEIGHT;
 	}		
 	// position buttons to the right side of the window
-	gButtons[ 0 ].setPosition( SCREEN_WIDTH - BUTTON_WIDTH, 20 );
-	gButtons[ 1 ].setPosition( SCREEN_WIDTH - BUTTON_WIDTH, BUTTON_HEIGHT+20 );
-	gButtons[ 2 ].setPosition( SCREEN_WIDTH - BUTTON_WIDTH, 2*BUTTON_HEIGHT +30);
+
 
 	for(int i=0; i< TOTAL_BUTTONS; ++i)
 	{
+		gButtons[i].setPosition(SCREEN_WIDTH - HIGH_WIDTH - 100, BUTTON_HEIGHT * (i + 1));
 		gButtons[i].setButtonID(i);
 	}
 	return true;
 }
 
-
-bool loadCards()
+bool loadCards() //  loads the cards and generate textures
 {
 	string pngPath, cardNr;
-	for ( int i=0; i<53; ++i )
+	for (int i=0; i<53; ++i)
 	{
-		cardNr = to_string( i );
+		cardNr = to_string(i);
 		pngPath = "cards/" + cardNr + ".png";
-		cardTexture[i].loadFromFile( pngPath );
+		gCardTexture[i].loadFromFile( pngPath );
 	}
 	return true;
 }
 
 void close()
 {
-	cardTexture[gcardID].free();  //Free loaded images	
-	SDL_DestroyRenderer( gRenderer );
-	SDL_DestroyWindow( gWindow );
+	gCardTexture[gcardID].free();  //Free loaded images	
+	SDL_DestroyRenderer(gRenderer);
+	SDL_DestroyWindow(gWindow);
 	gWindow = NULL;
 	gRenderer = NULL;
 	
@@ -383,110 +335,131 @@ void close()
 	TTF_Quit();
 }
 
-enum GameStates { START, PLAY, GAME_OVER};
-GameStates gameState;
-
 int main( int argc, char* args[] )
 {
 	srand(time(NULL));
+	const int WIN_SCORE = 25;
+	const int LOSE_SCORE = 0;
+	const int START_SCORE = 10;
+	gScore = START_SCORE;
+
+	enum GameStates 
+	{ 
+		START, 
+		PLAY, 
+		GAME_OVER
+	} gameState;
+
 	init(); //Start up SDL and create window
-	buildButtons();
+	loadCards(); // loads all the cards	
+	buildButtons(); //  build buttons from sprites
 	SDL_Color White = {255, 255, 255};
 	MessageTexture 
 		greetingText,
-		instructionsText,
 		continueText,
 		replayText,
-		resultText, 
+		resultText,
 		scoreText,
 		gameOverDefeatText,
 		presentationText,
-		gameOverWinText;
+		gameOverWinText,
+		winText,
+		loseText;
 
 	// text messages textures
-	replayText.create("Pritisni ENTER za novo igro", greetingFont, 15, White);
+	replayText.create("klik za novo igro", greetingFont, 15, White);
 	gameOverDefeatText.create("Konec igre. Izgubili ste.", greetingFont, 25, White);
 	greetingText.create("Pozdravljeni", greetingFont, 40, White);
 	gameOverWinText.create("Konec igre. ZMAGA!", greetingFont, 25, White);
 	presentationText.create("Dobrodosli v poenostavljeni igri RIZIKO", greetingFont, 30, White);
-	continueText.create("za nadaljevanje pritisnite tipko ENTER", greetingFont, 20, White);
+	continueText.create("klikni za nadaljevanje", greetingFont, 20, White);
+	winText.create("BRAVO! Tocka za vas!", greetingFont, 30, White);
+	loseText.create("Narobe. Izgubili ste tocko", greetingFont, 20, White);
 
-	loadCards(); // loads all the cards
 	bool quit = false;  //Main loop flag
-
 	SDL_Event e;  //Event handler
 	gameState = START;
-	while( !quit )  // game loop
+	while(!quit)  // game loop
 	{
 		while( SDL_PollEvent( &e ) != 0 ) // handling even loop
 		{
-			if( e.type == SDL_QUIT )
-			{	//User requests quit - click on X
-				quit = true;
-			}
-			for(int i = 0; i < TOTAL_BUTTONS; ++i)
+			if( e.type == SDL_QUIT ) quit = true;  //  user requests quit - click on X
+
+			switch(gameState)
 			{
-				gButtons[ i ].handleEvent(&e);
-			}	
-			if (gameState == GAME_OVER)
-			{
-				if (e.type == SDL_KEYDOWN)
-					if (e.key.keysym.sym == SDLK_RETURN)
+				case PLAY: // event handling PLAY state
+					for(int i = 0; i < TOTAL_BUTTONS; ++i) 
+					{
+						gButtons[ i ].handleEvent(&e);
+					}
+					break;
+
+				case GAME_OVER: // event handling GAME_OVER state
+					if (e.type == SDL_MOUSEBUTTONUP)
 					{
 						gameState = PLAY;
-						gScore = 10; //reset score
-						gcardID = 0;  //reset starting card to card back
+						gScore = START_SCORE; //reset score
+						gcardID = 0;  //reset starting card to card backside
 					}
-			}
-			if (gameState == START)
-			{
-				if (e.type == SDL_KEYDOWN)
-					if (e.key.keysym.sym == SDLK_RETURN)
-					{
+					break;
+
+				case START: // event handling START state
+					if (e.type == SDL_MOUSEBUTTONUP)
+						{
 						gameState = PLAY;
-						gScore = 10;
-					}
-			}			
-		}
-
-		SDL_SetRenderDrawColor( gRenderer, 0x00, 0x80, 0x00, 0x00);
-		SDL_RenderClear( gRenderer );
-
-		if (gameState == START)
-		{
-			greetingText.render(200, 100);
-			presentationText.render(60, 200);
-			continueText.render(130, 380);
-		}
-
-		if (gameState == PLAY)
-		{
-			cardTexture[gcardID].render(100, 100);
-			for( int i = 0; i < TOTAL_BUTTONS; ++i )
-			{	
-				scoreText.create("stanje: "+ to_string(gScore), greetingFont, 20, White);
-				scoreText.render(110, 360);
-				gButtons[i].render();
-				if ((gScore == 0) || (gScore == 25)) gameState = GAME_OVER;
-			}	
-		}
-
-		if (gameState == GAME_OVER)
-		{
-			if (gScore == 0)
-			{
-				gameOverDefeatText.render(200, 120);
-				replayText.render(200, 160);
+						gScore = START_SCORE;
+						gcardID = 0;  //reset starting card to card backside
+						}
+					break;		
 			}
-			if (gScore == 25)
-			{
-				gameOverWinText.render(200, 120);
-				replayText.render(200, 160);
-			}			
+		}
+
+		SDL_SetRenderDrawColor(gRenderer, 0x00, 0x80, 0x00, 0x00);
+		SDL_RenderClear(gRenderer);
+
+		switch(gameState) //rendering game states
+		{
+			case START:
+				greetingText.render(200, 100);
+				presentationText.render(60, 200);
+				continueText.render(130, 380);
+				break;
+
+			case PLAY:
+				gCardTexture[gcardID].render(100, 100);
+				for(int i = 0; i < TOTAL_BUTTONS; ++i)
+				{	
+					scoreText.create("stanje: "+ to_string(gScore), greetingFont, 20, White);
+					scoreText.render(110, 360);
+					gButtons[i].render();
+
+					if (gWIN == 'w') 
+						winText.render(110, 420);
+
+					else if (gWIN == 'l') 
+						loseText.render(110, 420);
+					
+					if (gScore == LOSE_SCORE || gScore == WIN_SCORE) 
+						gameState = GAME_OVER;
+				}
+				break;
+
+			case GAME_OVER:
+				gWIN = NULL;
+				if (gScore == LOSE_SCORE)
+				{
+					gameOverDefeatText.render(200, 120);
+					replayText.render(200, 160);
+				}
+				else
+				{
+					gameOverWinText.render(200, 120);
+					replayText.render(200, 160);
+				}
+				break;		
 		}
 		SDL_RenderPresent( gRenderer );	
-	}	
-
+	}
 	close();
 
 	return 0;
