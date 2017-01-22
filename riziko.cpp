@@ -13,8 +13,8 @@ const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
 
 //Button constants
-const int HIGH_WIDTH = 168;
-const int SEVEN_WIDTH = 78;
+const int HIGH_WIDTH = 168;  // the width of "HIGH" button
+const int SEVEN_WIDTH = 78;  // the width of "7" button
 const int BUTTON_HEIGHT = 100;
 const int TOTAL_BUTTONS = 3;
 int gcardID;
@@ -51,7 +51,7 @@ class LButton
 		LButton();
 		void setPosition( int x, int y );
 		void setButtonID( int id);
-		void handleEvent(SDL_Event* e );
+		void handleEvent(SDL_Event* e ); // mouse events on buttons
 		void render();
 
 	private:
@@ -201,48 +201,47 @@ void LButton::handleEvent(SDL_Event* e ) // handle mouse events in PLAY state
 			switch(e->type)
 			{
 				case SDL_MOUSEMOTION:
-				mCurrentSprite = 1 + 3 * mButtonID;
-				break;
+					mCurrentSprite = 1 + 3 * mButtonID;
+					break;
 			
 				case SDL_MOUSEBUTTONDOWN:
-				mCurrentSprite = 2 + 3 * mButtonID;
-				break;	
+					mCurrentSprite = 2 + 3 * mButtonID;
+					break;	
 
 				case SDL_MOUSEBUTTONUP:
-		        gcardID = rand() % 52 +1;  // pick a random number from 1 to 52 (also used to generate a file name)
-		        result = gcardID % 13; 
-        		if (result == 0) result = 13;  // "convert" to numberts 1 to 13 (A, 1 .. Q, K)
-        		winLose = gScore; // tomporary variable for comparing to gScore. Tells if the player wins or loses a turn
-        		switch(mButtonID)  // click button
-        		{
-        			case 0:  // High 
-	        			if (result > 7) gScore++;
-	        			else gScore--;
-						break;
-        			case 1:  // Seven
-	        			if (result == 7) gScore+=4;
-	        			else gScore--;
-						break;
-        			case 2:  // Low
-        				if (result < 7) gScore++;
-        				else gScore--; 
-						break;
-        		}
-        		if (gScore > winLose) 
-        			gWIN = 'w';  // used for rendering win/lose message after every turn
-        		else gWIN = 'l';
+			        gcardID = rand() % 52 +1;  // pick a random number from 1 to 52 (also used to generate a file name)
+			        result = gcardID % 13; 
+	        		if (result == 0) result = 13;  // "convert" to numberts 1 to 13 (A, 1 .. Q, K)
+	        		winLose = gScore; // tomporary variable for comparing to gScore. Tells if the player wins or loses a turn
+	        		switch(mButtonID)  // click button
+	        		{
+	        			case 0:  // High 
+		        			if (result > 7) gScore++;
+		        			else gScore--;
+							break;
+	        			case 1:  // Seven
+		        			if (result == 7) gScore+=4;
+		        			else gScore--;
+							break;
+	        			case 2:  // Low
+	        				if (result < 7) gScore++;
+	        				else gScore--; 
+							break;
+	        		}
+	        		if (gScore > winLose) 
+	        			gWIN = 'w';  // used for rendering win/lose message after every turn
+	        		else 
+	        			gWIN = 'l';
 
-        		
-				mCurrentSprite = 1 + 3 * mButtonID; // set a hover sprite
-				break;							
+					mCurrentSprite = 1 + 3 * mButtonID; // set a hover sprite
+					break;							
 			}
 		}
 	}
 }
 	
-void LButton::render()
-{
-	//Show current button sprite
+void LButton::render()  //Show current button sprite
+{ 
 	gButtonSpriteSheetTexture.render( mPosition.x, mPosition.y, &gSpriteClips[ mCurrentSprite ] );
 }
 
@@ -312,11 +311,10 @@ bool buildButtons() // creates buttons from spritesheet
 
 bool loadCards() //  loads the cards and generate textures
 {
-	string pngPath, cardNr;
+	string pngPath;
 	for (int i=0; i<53; ++i)
 	{
-		cardNr = to_string(i);
-		pngPath = "cards/" + cardNr + ".png";
+		pngPath = "cards/" + to_string(i) + ".png";
 		gCardTexture[i].loadFromFile( pngPath );
 	}
 	return true;
@@ -338,9 +336,12 @@ void close()
 int main( int argc, char* args[] )
 {
 	srand(time(NULL));
+
+	// game parameters
 	const int WIN_SCORE = 25;
 	const int LOSE_SCORE = 0;
 	const int START_SCORE = 10;
+	
 	gScore = START_SCORE;
 
 	enum GameStates 
@@ -439,13 +440,13 @@ int main( int argc, char* args[] )
 					else if (gWIN == 'l') 
 						loseText.render(110, 420);
 					
-					if (gScore == LOSE_SCORE || gScore == WIN_SCORE) 
+					if (gScore == LOSE_SCORE || gScore == WIN_SCORE)  // end of game
 						gameState = GAME_OVER;
 				}
 				break;
 
 			case GAME_OVER:
-				gWIN = NULL;
+				gWIN = NULL; // 3 state flag: NULL for the state before first click
 				if (gScore == LOSE_SCORE)
 				{
 					gameOverDefeatText.render(200, 120);
